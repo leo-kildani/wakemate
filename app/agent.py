@@ -30,7 +30,7 @@ class WakeMateAgent:
     def text_to_speech(self, text):
         audio = self.elevenlab.text_to_speech.convert(
             text=text,
-            voice_id="pwMBn0SsmN1220Aorv15",
+            voice_id="uju3wxzG5OhpWcoi3SMy",
             model_id="eleven_flash_v2",
             output_format="mp3_44100_128"
         )

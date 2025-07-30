@@ -69,31 +69,10 @@ class DrowsyDetector:
                         trigger_warning_thread = threading.Thread(target=self.warning_manager.trigger_warning)
                         trigger_warning_thread.start()
                     
-                    # Draw info around detected features
-                    cv2.rectangle(frame, left_eye_start, left_eye_end, (0, 255, 0), 2)
-                    cv2.rectangle(frame, right_eye_start, right_eye_end, (0, 255, 0), 2)
-                    cv2.rectangle(frame, mouth_start, mouth_end, (0, 255, 0), 2)
-
-                    cv2.putText(frame, f"Left Eye: {EYENET_CLASSES[left_eye_class]} ({left_eye_conf:.2f})",
-                                (left_eye_start[0] - 20, left_eye_start[1] - 20), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                    cv2.putText(frame, f"Right Eye: {EYENET_CLASSES[right_eye_class]} ({right_eye_conf:.2f})",
-                                (right_eye_start[0] - 20, right_eye_start[1] - 20), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                    cv2.putText(frame, f"Mouth: {YAWNET_CLASSES[mouth_class]} ({mouth_conf:.2f})",
-                                (mouth_start[0] - 20, mouth_start[1] - 20), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                    
-                    cv2.putText(frame, f"Warnings: {self.warning_manager.warning_count}",
-                                (10, 30), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                    cv2.putText(frame, f"Yawns: {self.warning_manager.yawn_count}",
-                                (10, 60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                    cv2.putText(frame, f"Eyes Closed: {self.warning_manager.eyes_closed_count}",
-                                (10, 90), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
+                self._draw_detection_overlay(frame, 
+                                             (left_eye_start, left_eye_end, right_eye_start, right_eye_end, mouth_start, mouth_end),
+                                             (left_eye_class, right_eye_class, mouth_class),
+                                             (left_eye_conf, right_eye_conf, mouth_conf))
 
             cv2.imshow("Camera Frame", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -155,3 +134,50 @@ class DrowsyDetector:
         '''
         feature = frame[start[1]:end[1], start[0]:end[0]]
         return preprocess_transform(feature).unsqueeze(0).to(DEVICE)
+
+    def _draw_detection_overlay(self, frame, features_landmarks, features_class, features_conf):
+        '''
+        Draws rectangles and labels around detected features.
+        feature_lanmarks: List of tuples containing start and end coordinates for each feature. (left_eye_start, left_eye_end, right_eye_start, right_eye_end, mouth_start, mouth_end)
+        feature_class: List of classes for each feature. (left_eye_class, right_eye_class, mouth_class)
+        feature_conf: List of confidence scores for each feature. (left_eye_conf, right_eye
+        '''
+        # Draw rectangles around detected features
+        left_eye_color = (0, 255, 0)
+        right_eye_color = (0, 255, 0)
+        mouth_color = (0, 0, 255) if features_class[2] == DROWSY else (0, 255, 0)
+        if features_class[0] == DROWSY and features_class[1] == DROWSY:
+            left_eye_color = (0, 0, 255)
+            right_eye_color = (0, 0, 255)
+        elif features_class[0] == DROWSY:
+            left_eye_color = (0, 165, 255)
+        elif features_class[1] == DROWSY:
+            right_eye_color = (0, 165, 255)
+
+
+        cv2.rectangle(frame, features_landmarks[0], features_landmarks[1], left_eye_color, 2)
+        cv2.rectangle(frame, features_landmarks[2], features_landmarks[3], right_eye_color, 2)
+        cv2.rectangle(frame, features_landmarks[4], features_landmarks[5], mouth_color, 2)
+
+        cv2.putText(frame, f"L Eye: {features_class[0]} ({features_conf[0]:.2f})", (features_landmarks[1][0], features_landmarks[0][1]), cv2.FONT_HERSHEY_PLAIN, 1, left_eye_color, 2)
+        cv2.putText(frame, f"R Eye: {features_class[1]} ({features_conf[1]:.2f})", (features_landmarks[2][0] - 60, features_landmarks[2][1]), cv2.FONT_HERSHEY_PLAIN, 1, right_eye_color, 2)
+
+        cv2.putText(frame, f"Mouth: {features_class[2]} ({features_conf[2]:.2f})", (features_landmarks[4][0], features_landmarks[4][1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, mouth_color, 2)
+        
+        stats_x = 10
+        stats_font_scale = 1.2
+        stats_color = (255, 255, 255)
+        stats_thickness = 2
+        line_height = 30
+
+        cv2.putText(frame, f"Warnings: {self.warning_manager.warning_count}",
+                    (stats_x, line_height), 
+                    cv2.FONT_HERSHEY_PLAIN, stats_font_scale, stats_color, stats_thickness)
+
+        cv2.putText(frame, f"Yawns: {self.warning_manager.yawn_count}",
+                    (stats_x, line_height * 2), 
+                    cv2.FONT_HERSHEY_PLAIN, stats_font_scale, stats_color, stats_thickness)
+
+        cv2.putText(frame, f"Eyes Closed: {self.warning_manager.eyes_closed_count}",
+                    (stats_x, line_height * 3), 
+                    cv2.FONT_HERSHEY_PLAIN, stats_font_scale, stats_color, stats_thickness)
