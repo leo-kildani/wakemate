@@ -1,5 +1,6 @@
 from config import *
 from agent import WakeMateAgent
+import threading
 
 class WarningManager:
     def __init__(self, agent: WakeMateAgent):
@@ -10,20 +11,23 @@ class WarningManager:
         self.warning_in_progress = False
     
     def record_yawn(self):
-        if (self.yawn_count == YAWN_FRAMES_THRESHOLD):
-            self.yawn_count = 1
-            return True
         self.yawn_count += 1
-        return False
+        if self.yawn_count == YAWN_TRIGGER:
+            self.record_warning()
+            self.yawn_count = 0
+
     
     def record_eyes_closed(self):
-        if (self.eyes_closed_count == EYES_CLOSED_FRAMES_THRESHOLD):
-            self.eyes_closed_count = 1
-            return True
         self.eyes_closed_count += 1
-    
+        if self.eyes_closed_count == EYES_CLOSED_TRIGGER:
+            self.record_warning()
+            self.eyes_closed_count = 0
+
     def record_warning(self):
         self.warning_count += 1
+        if self.warning_count == INIT_WARNING_COUNT:
+            warning_thread = threading.Thread(target=self.trigger_warning, daemon=True)
+            warning_thread.start()
     
     def reset_count(self):
         self.yawn_count = 0

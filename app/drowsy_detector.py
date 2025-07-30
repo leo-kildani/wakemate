@@ -7,7 +7,6 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 from warning_manager import WarningManager
 from camera import Camera
-import threading
 
 
 class DrowsyDetector:
@@ -18,11 +17,14 @@ class DrowsyDetector:
 
 
     def start_detecting(self):
+        frames_eyes_closed = 0
+        frames_yawning = 0
         for frame in self.camera.get_frames():
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # get grayscale frame
             faces = self.detector(gray)  # detect faces in the frame
 
-            # loop through each face detected
+
+            # loop through each face detected (ideally one camera in frame)
             for face in faces:  
                 landmarks = self.predictor(gray, face)  # get facial landmarks
                 left_eye_start, left_eye_end = self._extract_feature(frame, landmarks, LEFT_EYE_INDICES)
@@ -57,18 +59,26 @@ class DrowsyDetector:
                     avg_eyes_conf = (left_eye_conf + right_eye_conf) / 2
                     is_eyes_sleepy = (left_eye_class == DROWSY and 
                                         right_eye_class == DROWSY and 
-                                        avg_eyes_conf >= EYES_CLOSED_MODEL_THRESHOLD and 
-                                        self.warning_manager.record_eyes_closed())
+                                        avg_eyes_conf >= EYES_CLOSED_MODEL_THRESHOLD)
+                    if is_eyes_sleepy:
+                        frames_eyes_closed += 1
+                    else:
+                        frames_eyes_closed = 0
                     
-                    is_yawning = (mouth_class == DROWSY and 
-                                    mouth_conf >= YAWN_MODEL_THRESHOLD and 
-                                    self.warning_manager.record_yawn())
+                    is_yawning = (mouth_class == DROWSY and mouth_conf >= YAWN_MODEL_THRESHOLD)
+                    if is_yawning:
+                        frames_yawning += 1
+                    else:
+                        frames_yawning = 0
+                    
+                    if frames_eyes_closed == EYES_CLOSED_FRAMES_THRESHOLD:
+                        self.warning_manager.record_eyes_closed()
+                        frames_eyes_closed = 0
 
-                    if is_eyes_sleepy or is_yawning:
-                        self.warning_manager.record_warning()
-                        trigger_warning_thread = threading.Thread(target=self.warning_manager.trigger_warning)
-                        trigger_warning_thread.start()
-                    
+                    if frames_yawning == YAWN_FRAMES_THRESHOLD:
+                        self.warning_manager.record_yawn()
+                        frames_yawning = 0
+
                 self._draw_detection_overlay(frame, 
                                              (left_eye_start, left_eye_end, right_eye_start, right_eye_end, mouth_start, mouth_end),
                                              (left_eye_class, right_eye_class, mouth_class),
